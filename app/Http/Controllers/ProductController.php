@@ -70,7 +70,7 @@ class ProductController extends Controller
             });
         }
 
-        return response()->json($query->orderBy('created_at', 'desc')->paginate(100));
+        return response()->json($query->orderBy('created_at', 'desc')->paginate($request->per_page ?? 12));
     }
 
     // Get single product details
