@@ -19,14 +19,31 @@ Route::post('/auth/magic-verify', [MagicLinkController::class, 'verify']);
 
 Route::get('/locations', [LocationController::class, 'index']);
 
+Route::get('/brands', function() {
+    return response()->json([
+        ['name' => 'Apple', 'logo' => 'apple.png'],
+        ['name' => 'Samsung', 'logo' => 'samsung.png'],
+        ['name' => 'Sony', 'logo' => 'sony.png'],
+        ['name' => 'LG', 'logo' => 'lg.png'],
+        ['name' => 'MSI', 'logo' => 'msi.png'],
+        ['name' => 'HP', 'logo' => 'hp.png'],
+        ['name' => 'Dell', 'logo' => 'dell.png'],
+        ['name' => 'Asus', 'logo' => 'asus.png'],
+    ]);
+});
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'me']);
+    Route::put('/user', [AuthController::class, 'update']);
+    Route::post('/user/change-password', [AuthController::class, 'changePassword']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::get('/my-orders', [OrderController::class, 'myOrders']);
 });
 
 // Public API Routes
 Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
-Route::post('/contact', [ContactController::class, 'send']);
+Route::post('/contact', [ContactController::class, 'send'])->middleware('throttle:3,1');
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::get('/categories', [CategoryController::class, 'index']);

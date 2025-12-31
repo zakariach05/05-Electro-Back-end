@@ -38,11 +38,15 @@ class ProductController extends Controller
             });
         }
 
-        // Filter by Category
+        // Filter by Category (Recursive)
         if ($request->has('category')) {
-            $query->whereHas('category', function ($q) use ($request) {
-                $q->where('slug', $request->category);
-            });
+            $categorySlug = $request->category;
+            $category = Category::where('slug', $categorySlug)->first();
+            
+            if ($category) {
+                $categoryIds = $this->getCategoryDescendants($category);
+                $query->whereIn('category_id', $categoryIds);
+            }
         }
 
         // Filter by Featured
@@ -283,6 +287,15 @@ class ProductController extends Controller
         return response()->download($filePath, 'produits_export.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    protected function getCategoryDescendants($category)
+    {
+        $ids = [$category->id];
+        foreach ($category->children as $child) {
+            $ids = array_merge($ids, $this->getCategoryDescendants($child));
+        }
+        return $ids;
     }
 
     public function destroy($id)

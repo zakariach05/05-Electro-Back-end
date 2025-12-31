@@ -100,10 +100,17 @@ class OrderController extends Controller
             $sellerItems = [];
             foreach ($request->items as $itemData) {
                 $product = \App\Models\Product::with('seller')->find($itemData['id']);
-                $sellerId = $product->seller_id ?? 1; // fallback to admin (1) if no seller set
+                
+                // Use product's seller or the first seller in the database as ultimate fallback
+                $defaultSellerId = \App\Models\Seller::first() ? \App\Models\Seller::first()->id : null;
+                $sellerId = $product->seller_id ?? $defaultSellerId; 
+
+                if (!$sellerId) {
+                    throw new \Exception("Aucun vendeur disponible pour le produit: " . $product->name);
+                }
 
                 // Ensure we always have a seller object with expected properties
-                $sellerObj = $product->seller ?? (object) ['city' => '', 'prep_days' => 0];
+                $sellerObj = $product->seller ?? \App\Models\Seller::find($sellerId) ?? (object) ['city' => 'Casablanca', 'prep_days' => 1];
 
                 if (!isset($sellerItems[$sellerId])) {
                     $sellerItems[$sellerId] = [
@@ -176,6 +183,15 @@ class OrderController extends Controller
     public function index()
     {
         return Order::with(['items.product', 'subOrders.seller'])->latest()->get();
+    }
+
+    public function myOrders(Request $request)
+    {
+        $user = $request->user();
+        return Order::with(['items.product', 'subOrders.seller'])
+            ->where('customer_email', $user->email)
+            ->latest()
+            ->get();
     }
 
     public function show(Request $request, $id)

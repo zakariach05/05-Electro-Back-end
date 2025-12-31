@@ -19,7 +19,7 @@ Votre commande **#ECO-{{ str_pad($order->id, 6, '0', STR_PAD_LEFT) }}** a bien �
 
 ## 🎯 Suivez votre commande en temps réel
 
-<x-mail::button :url="url('/track/' . $order->id . '?token=' . $order->secure_token)">
+<x-mail::button :url="config('app.frontend_url', 'http://localhost:3000') . '/track/' . $order->id">
 📱 Suivre ma commande
 </x-mail::button>
 

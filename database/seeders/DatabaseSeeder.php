@@ -5,147 +5,107 @@ namespace Database\Seeders;
 use Illuminate\Database\Seeder;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Seller;
 use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Clear existing data
+        // Clear existing data safely
+        \Illuminate\Support\Facades\DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        \App\Models\Order::truncate();
+        \Illuminate\Support\Facades\DB::table('sub_orders')->delete();
         Product::whereNotNull('id')->delete();
         Category::whereNotNull('id')->delete();
+        Seller::whereNotNull('id')->delete();
+        \Illuminate\Support\Facades\DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        
         $this->call(AdminUserSeeder::class);
         $this->call(LocationSeeder::class);
 
-        // Use explicit 127.0.0.1:8000 to ensure images load during development
-        $baseUrl = 'http://127.0.0.1:8000/storage/Produit';
+        // 0. Create Default Seller
+        $defaultSeller = Seller::create([
+            'name' => 'Electro-05',
+            'city' => 'Casablanca',
+            'email' => 'contact@electro05.ma',
+            'prep_days' => 1
+        ]);
 
-        // 1. Create Categories
-        $categories = [
-            [
-                'name' => 'Smartphones',
-                'slug' => 'smartphones',
-                // Use a real image for the category cover
-                'image' => "$baseUrl/Phone/Apple/IPhone-15/IPhone-15-pro-max/IPhone 15 pro max 256go Titane Natural.png",
-                'folder' => 'Phone',
-                'children' => [
-                    ['name' => 'iPhone', 'slug' => 'iphone', 'brand_folder' => 'Apple'],
-                    ['name' => 'Samsung', 'slug' => 'samsung', 'brand_folder' => 'Samsung'],
-                    ['name' => 'Xiaomi', 'slug' => 'xiaomi', 'brand_folder' => 'Xiaomi'],
-                    ['name' => 'Oppo', 'slug' => 'oppo', 'brand_folder' => 'Oppo'],
-                ]
-            ],
-            [
-                'name' => 'PC & Mac',
-                'slug' => 'pc-mac',
-                'image' => "$baseUrl/Pc/cover.png",
-                'folder' => 'Pc',
-                'children' => [
-                    ['name' => 'MacBook Pro', 'slug' => 'macbook-pro', 'brand_folder' => 'PC portable/Apple (MacBook)'],
-                    ['name' => 'MacBook Air', 'slug' => 'macbook-air', 'brand_folder' => 'PC portable/Apple (MacBook)'],
-                    ['name' => 'PC Gamer', 'slug' => 'pc-gamer', 'brand_folder' => 'Pc Gamer'],
-                    ['name' => 'Bureautique', 'slug' => 'office', 'brand_folder' => 'PC portable/Dell'], // Example mapping
-                ]
-            ],
-            [
-                'name' => 'Gaming',
-                'slug' => 'gaming',
-                'image' => "$baseUrl/Jeux & Consoles/cover.png",
-                'folder' => 'Jeux & Consoles',
-                'children' => [
-                    ['name' => 'PlayStation 5', 'slug' => 'ps5', 'brand_folder' => 'Sony'],
-                    ['name' => 'Xbox Series X', 'slug' => 'xbox', 'brand_folder' => 'Microsoft'],
-                    ['name' => 'Nintendo Switch', 'slug' => 'nintendo', 'brand_folder' => 'Nintendo'],
-                ]
-            ],
-            [
-                'name' => 'Accessoires',
-                'slug' => 'accessories',
-                'image' => "$baseUrl/Audio  Hi-Fi  Casques/cover.png",
-                'folder' => 'Audio Hi-Fi Casques',
-                'children' => [
-                    ['name' => 'Audio', 'slug' => 'audio', 'brand_folder' => 'JBL'], // Example
-                    ['name' => 'Montres Connectées', 'slug' => 'smartwatches', 'brand_folder' => 'Apple'],
-                ]
-            ],
+        // 1. Create Main Categories (Matching Home.jsx UNIVERS_CATEGORIES)
+        $catMap = [
+            'Smartphones' => ['slug' => 'smartphones', 'subs' => ['iPhone' => 'iphone', 'Samsung Galaxy' => 'samsung_phone']],
+            'PC & Mac' => ['slug' => 'pc-mac', 'subs' => ['MacBook' => 'macbook', 'Laptops' => 'laptops', 'PC Gamer' => 'pc-gamer']],
+            'Gaming' => ['slug' => 'gaming', 'subs' => ['PS5' => 'ps5', 'Xbox' => 'xbox', 'Nintendo' => 'nintendo']],
+            'Audio Hi-Fi' => ['slug' => 'accessories', 'subs' => ['Casques' => 'headphones', 'Enceintes' => 'speakers']],
+            'Électroménager' => ['slug' => 'appliances', 'subs' => ['Café' => 'coffee-machines', 'Cuisinière' => 'kitchen']],
+            'Smart Home' => ['slug' => 'smart-home', 'subs' => ['Domotique' => 'domotique', 'Sécurité' => 'security']],
+            'TV & Vidéo' => ['slug' => 'tv', 'subs' => ['Smart TV' => 'smart-tv', 'Home Cinéma' => 'home-cinema']],
+            'Réseaux' => ['slug' => 'networks', 'subs' => ['Routeurs' => 'routers', 'Wifi' => 'wifi-extenders']]
         ];
 
-        foreach ($categories as $catData) {
+        foreach ($catMap as $mainName => $data) {
             $parent = Category::create([
-                'name' => $catData['name'],
-                'slug' => $catData['slug'],
-                'image' => $catData['image']
+                'name' => $mainName,
+                'slug' => $data['slug'],
+                'image' => "https://images.unsplash.com/photo-1550009158-9ebf69173e03?q=80&w=800"
             ]);
 
-            foreach ($catData['children'] as $childData) {
-                $child = Category::create([
-                    'name' => $childData['name'],
-                    'slug' => $childData['slug'],
-                    'parent_id' => $parent->id,
+            foreach ($data['subs'] as $subName => $subSlug) {
+                Category::create([
+                    'name' => $subName,
+                    'slug' => $subSlug,
+                    'parent_id' => $parent->id
                 ]);
-
-                // Helper to build path: /storage/Produit/{CategoryFolder}/{BrandSubFolder}/{slug}.jpg
-                $folder = $catData['folder'];
-                $subFolder = $childData['brand_folder'] ?? 'Autres';
-                
-                // Seed Products
-                if ($child->slug === 'iphone') {
-                    $applePath = "$baseUrl/$folder/$subFolder";
-                    
-                    // --- iPhone 13 Series ---
-                    $this->createProduct($child->id, 'Apple iPhone 13 Pro 256GB Silver', 'iphone-13-pro-silver', 7900, "$applePath/IPhone-13/IPhone-13-pro/Apple_iPhone-13 Pro 256GB.png", false, 'occasion');
-                    $this->createProduct($child->id, 'Apple iPhone 13 Pro 256GB Gold', 'iphone-13-pro-gold', 8200, "$applePath/IPhone-13/IPhone-13-pro/apple-iphone-13-pro-256GB-gold-cpo.png", false, 'reconditionné');
-                    $this->createProduct($child->id, 'Apple iPhone 13 Pro 256GB Alpine Green', 'iphone-13-pro-green', 8200, "$applePath/IPhone-13/IPhone-13-pro/iphone13 pro 256GB-green.png");
-                    
-                    $this->createProduct($child->id, 'Apple iPhone 13 Pro Max 256GB Sierra Blue', 'iphone-13-pro-max-blue', 9000, "$applePath/IPhone-13/IPhone-13-pro-max/IPhone 13-Pro-max 256GB Bleu.png", false, 'reconditionné');
-                    $this->createProduct($child->id, 'Apple iPhone 13 Pro Max 256GB Gold', 'iphone-13-pro-max-gold', 9200, "$applePath/IPhone-13/IPhone-13-pro-max/IPhone 13-Pro-max 256GB Gold.png");
-                    $this->createProduct($child->id, 'Apple iPhone 13 Pro Max 256GB Silver', 'iphone-13-pro-max-white', 9000, "$applePath/IPhone-13/IPhone-13-pro-max/IPhone 13-Pro-max 256GB white.png");
-
-                    // --- iPhone 14 Series ---
-                    $this->createProduct($child->id, 'Apple iPhone 14 Pro 256GB Gold', 'iphone-14-pro-gold', 10500, "$applePath/IPhone-14-/IPhone-14-pro/IPhone 14  pro 256GB Gold.png", false, 'neuf');
-                    $this->createProduct($child->id, 'Apple iPhone 14 Pro 256GB Deep Purple', 'iphone-14-pro-purple', 10500, "$applePath/IPhone-14-/IPhone-14-pro/IPhone 14  pro 256GB Violet Intense.png");
-                    
-                    $this->createProduct($child->id, 'iPhone 14 Pro Max - Space Edition', 'iphone-14-pro-max-black', 11900, "$applePath/IPhone-14-/IPhone-14-pro-max/IPhone 14  pro max 256GB Black.png", true, 'neuf', 5, "L'élégance du noir sidéral alliée à la puissance de la puce A16 Bionic.");
-                    $this->createProduct($child->id, 'iPhone 14 Pro Max - Gold Luxury', 'iphone-14-pro-max-gold', 11900, "$applePath/IPhone-14-/IPhone-14-pro-max/IPhone 14  pro max 256GB Gold.png");
-                    $this->createProduct($child->id, 'iPhone 14 Pro Max - Silver Arctic', 'iphone-14-pro-max-silver', 11900, "$applePath/IPhone-14-/IPhone-14-pro-max/IPhone 14 pro et pro max 256GB White.png");
-
-
-                    // --- iPhone 15 Series ---
-                    $this->createProduct($child->id, 'Apple iPhone 15 Pro Max 256GB White Titanium', 'iphone-15-pro-max-white', 14500, "$applePath/IPhone-15/IPhone-15-pro-max/IPhone 15 pro max 1TB White Titanium.png", true, 'neuf');
-                    $this->createProduct($child->id, 'iPhone 15 Pro Max - Blue Titanium', 'iphone-15-pro-max-blue', 13900, "$applePath/IPhone-15/IPhone-15-pro-max/IPhone 15 pro max 256go Blue Titanium.png", true, 'neuf', 8, "Le titane de qualité aérospatiale rencontre la puissance brute.");
-                    $this->createProduct($child->id, 'iPhone 15 Pro Max - Natural Titanium', 'iphone-15-pro-max-natural', 14200, "$applePath/IPhone-15/IPhone-15-pro-max/IPhone 15 pro max 256go Titane Natural.png", true, 'neuf', null, "La pureté du titane naturel pour un look sophistiqué.");
-                    $this->createProduct($child->id, 'iPhone 15 Pro Max - Black Stealth', 'iphone-15-pro-max-black', 14200, "$applePath/IPhone-15/IPhone-15-pro-max/iPhone_15_Pro_Max_Black_Titanium 1TB.png", true, 'neuf');
-
-                    // --- iPhone 16 Series ---
-                    $this->createProduct($child->id, 'Apple iPhone 16 256GB Black', 'iphone-16-black', 10900, "$applePath/IPhone-16/IPhone 16 Normal/IPhone 16 Normal Black 256GB .png", true, 'neuf');
-                    $this->createProduct($child->id, 'Apple iPhone 16 256GB Blue', 'iphone-16-blue', 10900, "$applePath/IPhone-16/IPhone 16 Normal/IPhone 16 Normal blue 256GB.png");
-                    $this->createProduct($child->id, 'Apple iPhone 16 256GB Green', 'iphone-16-green', 10900, "$applePath/IPhone-16/IPhone 16 Normal/IPhone 16 Normal green 256GB.png");
-                    
-                    $this->createProduct($child->id, 'iPhone 16 Pro Max - Future Titanium', 'iphone-16-pro-max-natural', 16900, "$applePath/IPhone-16/IPhone-16-pro-max/IPhone 16 pro max 256go Titane Natural.png", true, 'neuf', null, "L'intelligence Apple au service de votre créativité.");
-
-                    // --- iPhone 17 Series ---
-                    $this->createProduct($child->id, 'Apple iPhone 17 256GB Pink', 'iphone-17-pink', 11500, "$applePath/IPhone-17/IPhone 17 Normal/iPhone-17 Pink 256GB.png", true, 'neuf');
-                    $this->createProduct($child->id, 'Apple iPhone 17 256GB Pastel Blue', 'iphone-17-blue', 11500, "$applePath/IPhone-17/IPhone 17 Normal/iphone 17 Bleu Pastel. 256Gb.png");
-                    
-                    $this->createProduct($child->id, 'Apple iPhone 17 Pro Max 1TB Deep Blue', 'iphone-17-pro-max-deep-blue', 19500, "$applePath/IPhone-17/IPhone-17-pro-max/IPhone 17pro-max 1TB deep blue.png", true, 'neuf');
-                    $this->createProduct($child->id, 'Apple iPhone 17 Pro Max 1TB Cosmic Orange', 'iphone-17-pro-max-orange', 19500, "$applePath/IPhone-17/IPhone-17-pro-max/iPhone-17-Pro-1TB cosmic-orange.png", true, 'neuf');
-                    $this->createProduct($child->id, 'Apple iPhone 17 Pro Max 1TB Pearl White', 'iphone-17-pro-max-white', 19500, "$applePath/IPhone-17/IPhone-17-pro-max/iphone-17-pro-max-1TB white.png", true, 'neuf');
-                }
             }
         }
+
+        // 2. Seed Products with professional Unsplash images
+        $this->seedProducts();
+    }
+
+    private function seedProducts()
+    {
+        $cats = Category::all()->pluck('id', 'slug')->toArray();
+
+        // --- SMARTPHONES ---
+        $this->createProduct($cats['iphone'], 'iPhone 15 Pro Max 256GB Titanium', 'iphone-15-pm', 14500, "https://images.unsplash.com/photo-1696446701796-da61225697cc?q=80&w=800", true, 'neuf', 15);
+        $this->createProduct($cats['iphone'], 'iPhone 14 Pro 256GB Deep Purple', 'iphone-14-pro', 10500, "https://images.unsplash.com/photo-1663499482523-1c0c1bae4ce1?q=80&w=800", false, 'neuf', 10);
+        $this->createProduct($cats['samsung_phone'], 'Samsung Galaxy S24 Ultra 512GB', 'samsung-s24-ultra', 13500, "https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=800", true, 'neuf', 5);
+
+        // --- TV ---
+        $this->createProduct($cats['smart-tv'], 'Sony Bravia XR OLED 55"', 'sony-bravia-55', 18500, "https://images.unsplash.com/photo-1552533231-730ac9f7962c?q=80&w=800", true, 'neuf', 20);
+        $this->createProduct($cats['smart-tv'], 'LG C3 OLED 65" 4K Smart TV', 'lg-c3-65', 22500, "https://images.unsplash.com/photo-1509281373149-e957c6296406?q=80&w=800", true, 'neuf', 25);
+        $this->createProduct($cats['home-cinema'], 'Samsung QLED 4K 65" Q60C', 'samsung-qled-65', 12000, "https://images.unsplash.com/photo-1593784991095-a20592b739b6?q=80&w=800", true, 'neuf', 18);
+
+        // --- PC & MAC ---
+        $this->createProduct($cats['macbook'], 'MacBook Pro 14" M3 Pro 512GB', 'macbook-pro-14', 24900, "https://images.unsplash.com/photo-1517336714467-d23784a1a821?q=80&w=800", true, 'neuf', 5);
+        $this->createProduct($cats['laptops'], 'Dell XPS 13 Plus 4K Touch', 'dell-xps-13', 18500, "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?q=80&w=800", false, 'neuf', 15);
+        $this->createProduct($cats['pc-gamer'], 'PC Gamer Master 05 RTX 4080', 'pc-gamer-master', 28500, "https://images.unsplash.com/photo-1587202372775-e229f172b9d7?q=80&w=800", true, 'neuf', 12);
+
+        // --- GAMING ---
+        $this->createProduct($cats['ps5'], 'Console PlayStation 5 Slim 1TB', 'ps5-slim', 5500, "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?q=80&w=800", true, 'neuf', 5);
+        $this->createProduct($cats['xbox'], 'Console Xbox Series X 1TB', 'xbox-series-x', 6200, "https://images.unsplash.com/photo-1605906302484-ef4b5a3378b1?q=80&w=800", true, 'neuf', 5);
+
+        // --- OTHERS ---
+        $this->createProduct($cats['headphones'], 'Sony WH-1000XM5 Noise Cancelling', 'sony-xm5', 3600, "https://images.unsplash.com/photo-1546435770-a3e426bf472b?q=80&w=800", true, 'neuf', 10);
+        $this->createProduct($cats['coffee-machines'], 'Nespresso Vertuo Pop - Black', 'nespresso-vertuo', 2100, "https://images.unsplash.com/photo-1510972527921-ce03766a1cf1?q=80&w=800", true, 'neuf', 20);
+        $this->createProduct($cats['domotique'], 'Google Nest Hub (2nd Gen)', 'google-nest', 1100, "https://images.unsplash.com/photo-1589492477829-5e65395b66cc?q=80&w=800", false, 'neuf', 15);
+        $this->createProduct($cats['routers'], 'TP-Link Archer AXE75 Tri-Band', 'tplink-axe75', 2500, "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?q=80&w=800", false, 'neuf', 5);
     }
 
     private function createProduct($catId, $name, $slug, $price, $img, $featured = false, $state = 'neuf', $promo = null, $desc = null)
     {
         Product::create([
             'category_id' => $catId,
+            'seller_id' => Seller::first()->id,
             'name' => $name,
             'slug' => $slug,
-            'description' => $desc ?? "Découvrez l'innovation et la performance avec " . $name . ". Un produit premium conçu pour répondre à toutes vos exigences technologiques.",
+            'description' => $desc ?? "Produit premium sélectionné par Electro-05 pour sa qualité et ses performances exceptionnelles.",
             'price' => $price,
-            'old_price' => $promo ? $price / (1 - $promo/100) : null,
+            'old_price' => $promo ? round($price / (1 - $promo/100)) : null,
             'image' => $img,
-            'stock' => rand(5, 50),
+            'stock' => rand(10, 100),
             'is_featured' => $featured,
             'state' => $state,
             'promo' => $promo
