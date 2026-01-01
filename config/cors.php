@@ -17,7 +17,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => explode(',', env('ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')),
+    'allowed_origins' => explode(',', env('ALLOWED_ORIGINS', 'https://05-electro.vercel.app')),
 
     'allowed_origins_patterns' => [],
 
